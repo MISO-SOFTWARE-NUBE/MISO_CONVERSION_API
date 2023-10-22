@@ -17,10 +17,9 @@ db.create_all()
 cors = CORS(app)
 
 api = Api(app)
-api.add_resource(VistaSolicitud, '/api/task/<string:download_type>/<int:file_id>',
-                 '/api/task/', '/api/delete-task/<int:file_id>/')
-api.add_resource(VistaSolicitudes, '/api/all_task/')
-api.add_resource(VistaLogIn, '/api/auth/login/')
-api.add_resource(VistaSignUp, '/api/auth/signup/')
+api.add_resource(VistaSolicitud, '/api/tasks/<string:download_type>/<int:id_task>', '/api/tasks/<int:id_task>')
+api.add_resource(VistaSolicitudes, '/api/tasks')
+api.add_resource(VistaLogIn, '/api/auth/login')
+api.add_resource(VistaSignUp, '/api/auth/signup')
 
 jwt = JWTManager(app)

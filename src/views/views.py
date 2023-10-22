@@ -81,11 +81,11 @@ class VistaLogIn(Resource):
 
 class VistaSolicitud(Resource):
     @jwt_required()
-    def get(self, download_type, file_id):
-        if file_id is None:
+    def get(self, download_type, id_task):
+        if id_task is None:
             return {'message': 'Debe enviar un id de solicitud para descargar el archivo'}, 400
         db_request = Solicitudes.query.filter(
-            Solicitudes.id == file_id).first()
+            Solicitudes.id == id_task).first()
         user_id = get_jwt_identity()
         if db_request is None:
             return {'message': 'Solicitud no encontrada'}, 404
@@ -102,7 +102,38 @@ class VistaSolicitud(Resource):
         else:
             return {'message': 'Debe escoger el origen del archivo (original/converted)'}, 400
         return send_file(destination_path, as_attachment=True)
+    
+    @jwt_required()
+    def delete(self, id_task):
+        if id_task is None:
+            return {'message': 'Debe enviar un id de solicitud para borrar'}, 400
+        db_request = Solicitudes.query.filter(
+            Solicitudes.id == id_task).first()
+        user_id = get_jwt_identity()
+        if db_request is None:
+            return {'message': 'Solicitud no encontrada'}, 404
+        if user_id != db_request.user_id:
+            return {'message': 'El recurso solicitado no le pertenece'}, 404
+        input_file_to_delete = f"{db_request.input_path}/{db_request.fileName}.{db_request.input_format}"
+        if os.path.exists(input_file_to_delete):
+            os.remove(input_file_to_delete)
+        output_file_to_delete = f"{db_request.output_path}/{db_request.fileName}.{db_request.output_format}"
+        if os.path.exists(output_file_to_delete):
+            os.remove(output_file_to_delete)
+        db.session.delete(db_request)
+        db.session.commit()
+        return {'message': 'Solicitud eliminada'}, 200
 
+
+class VistaSolicitudes(Resource):
+    @jwt_required()
+    def get(self):
+        user_id = get_jwt_identity()
+        db_request = Solicitudes.query.filter(
+            Solicitudes.user_id == user_id).all()
+        mapr_result = map(map_db_request, db_request)
+        list_result = list(mapr_result)
+        return list_result
     @jwt_required()
     def post(self):
         user_id = get_jwt_identity()
@@ -165,35 +196,3 @@ class VistaSolicitud(Resource):
         perform_task.apply_async(args)
 
         return {'message': f'Solicitud registrada, para consultar su archivo utilice el siguiente id: ({new_request.id})'}, 200
-
-    @jwt_required()
-    def delete(self, file_id):
-        if file_id is None:
-            return {'message': 'Debe enviar un id de solicitud para borrar'}, 400
-        db_request = Solicitudes.query.filter(
-            Solicitudes.id == file_id).first()
-        user_id = get_jwt_identity()
-        if db_request is None:
-            return {'message': 'Solicitud no encontrada'}, 404
-        if user_id != db_request.user_id:
-            return {'message': 'El recurso solicitado no le pertenece'}, 404
-        input_file_to_delete = f"{db_request.input_path}/{db_request.fileName}.{db_request.input_format}"
-        if os.path.exists(input_file_to_delete):
-            os.remove(input_file_to_delete)
-        output_file_to_delete = f"{db_request.output_path}/{db_request.fileName}.{db_request.output_format}"
-        if os.path.exists(output_file_to_delete):
-            os.remove(output_file_to_delete)
-        db.session.delete(db_request)
-        db.session.commit()
-        return {'message': 'Solicitud eliminada'}, 200
-
-
-class VistaSolicitudes(Resource):
-    @jwt_required()
-    def get(self):
-        user_id = get_jwt_identity()
-        db_request = Solicitudes.query.filter(
-            Solicitudes.user_id == user_id).all()
-        mapr_result = map(map_db_request, db_request)
-        list_result = list(mapr_result)
-        return list_result
