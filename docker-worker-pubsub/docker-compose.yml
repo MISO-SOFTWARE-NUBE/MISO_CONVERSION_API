@@ -1,0 +1,12 @@
+version: "3.8"
+
+services:
+  worker:
+    build:
+      context: ..
+      dockerfile: ./docker-worker-pubsub/Dockerfile
+    environment:
+      - PYTHONPATH=/app
+    env_file:
+      - ./.env
+    command: ["python3", "tasks/tasks.py"]

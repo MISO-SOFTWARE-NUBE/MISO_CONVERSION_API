@@ -10,21 +10,27 @@ from flask_restful import Resource, reqparse
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity, JWTManager
 from flask_restful import Api
 from celery import Celery
-from config import BROKER_HOST, BROKER_PORT, USE_BUCKET, UPLOAD_BUCKET
+from config import BROKER_HOST, BROKER_PORT, USE_BUCKET, UPLOAD_BUCKET, USE_PUB_SUB, GCP_PROJECT_ID, GCP_SUBSCRIPTION_ID, GCP_TOPIC_ID
 from google.cloud import storage
+from google.cloud import pubsub_v1
 
+
+if USE_PUB_SUB:
+    publisher = pubsub_v1.PublisherClient()
+    topic_name = f'projects/{GCP_PROJECT_ID}/topics/{GCP_TOPIC_ID}'
+    def publish_to_topic(id):
+        data = str(id).encode("utf-8")
+        future = publisher.publish(topic_name, data)
+        print(f"Published message id {future.result()}")
+else:
+    celery_app = Celery('tasks', broker=f'redis://{BROKER_HOST}:{BROKER_PORT}/0')
+    @celery_app.task(name='conversor.convert')
+    def perform_task(id):
+        pass
 
 if USE_BUCKET:
     client = storage.Client()
     bucket = client.bucket(UPLOAD_BUCKET)
-
-celery_app = Celery('tasks', broker=f'redis://{BROKER_HOST}:{BROKER_PORT}/0')
-
-
-@celery_app.task(name='conversor.convert')
-def perform_task(id):
-    pass
-
 
 class VistaSignUp(Resource):
     def post(self):
@@ -231,8 +237,10 @@ class VistaSolicitudes(Resource):
         db.session.commit()
 
         # Proceed with the queue
-        args = (new_request.id, )
-        print(args)
-        perform_task.apply_async(args)
+        if USE_PUB_SUB:
+            publish_to_topic(new_request.id)
+        else:
+            args = (new_request.id, )
+            perform_task.apply_async(args)
 
         return {'message': f'Solicitud registrada, para consultar su archivo utilice el siguiente id: ({new_request.id})'}, 200

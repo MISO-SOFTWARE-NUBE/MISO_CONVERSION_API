@@ -22,3 +22,7 @@ BROKER_HOST = os.getenv("BROKER_HOST", "127.0.0.1")
 BROKER_PORT = os.getenv("BROKER_PORT", "6379")
 PROPAGATE_EXCEPTIONS = True
 USE_BUCKET = os.getenv("USE_BUCKET", "False").lower() in ('true', '1', 't')
+USE_PUB_SUB = os.getenv("USE_PUB_SUB", "False").lower() in ('true', '1', 't')
+GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID", "crear-proyecto-nuevo-en-gcp")
+GCP_TOPIC_ID = os.getenv("GCP_TOPIC_ID", "ConversorTopic")
+GCP_SUBSCRIPTION_ID =  os.getenv("GCP_SUBSCRIPTION_ID", "ConversorTopic-sub")

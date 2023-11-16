@@ -9,6 +9,7 @@ from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, DateT
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from google.cloud import storage
+from google.cloud import pubsub_v1
 
 from utils import get_blob_name_from_gs_uri, get_base_file_name
 
@@ -21,6 +22,14 @@ OUR_USER = os.getenv("DB_USER", "miso")
 OUR_PW = os.getenv("DB_PW", "miso")
 OUR_SECRET = os.getenv("SECRET", "conversiones")
 OUR_JWTSECRET = os.getenv("JWTSECRET", "conversiones")
+USE_PUB_SUB = os.getenv("USE_PUB_SUB", "False").lower() in ('true', '1', 't')
+GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID", "crear-proyecto-nuevo-en-gcp")
+GCP_TOPIC_ID = os.getenv("GCP_TOPIC_ID", "ConversorTopic")
+GCP_SUBSCRIPTION_ID =  os.getenv("GCP_SUBSCRIPTION_ID", "ConversorTopic-sub")
+BROKER_HOST = os.getenv("BROKER_HOST", "127.0.0.1")
+BROKER_PORT = os.getenv("BROKER_PORT", "6379")
+USE_BUCKET = os.getenv("USE_BUCKET", "False").lower() in ('true', '1', 't')
+UPLOAD_BUCKET = os.getenv("UPLOAD_BUCKET", "miso-converter-flask-app")
 
 SQLALCHEMY_DATABASE_URI = 'postgresql+psycopg2://{}:{}@{}:{}/{}'.format(
     OUR_USER, OUR_PW, OUR_HOST, OUR_PORT, OUR_DB)
@@ -62,24 +71,7 @@ class Solicitudes(Base):
     # Relationship for referencing Usuario
     usuario = relationship("Usuario", back_populates="solicitudes")
 
-
-BROKER_HOST = os.getenv("BROKER_HOST", "127.0.0.1")
-BROKER_PORT = os.getenv("BROKER_PORT", "6379")
-
-print("Celery is using BROKER_HOST:", BROKER_HOST)
-
-
-celery_app = Celery('tasks', broker=f'redis://{BROKER_HOST}:{BROKER_PORT}/0')
-
-USE_BUCKET = os.getenv("USE_BUCKET", "False").lower() in ('true', '1', 't')
-UPLOAD_BUCKET = os.getenv("UPLOAD_BUCKET", "miso-converter-flask-app")
-if USE_BUCKET:
-    client = storage.Client()
-    bucket = client.bucket(UPLOAD_BUCKET)
-
-
-@celery_app.task(name='conversor.convert')
-def perform_task(id):
+def process_task(id):
     # Establish a new session
     session = Session()
 
@@ -122,7 +114,7 @@ def perform_task(id):
 
                 if result.returncode != 0:
                     print("Error converting file:",
-                          result.stderr, result.stdout)
+                        result.stderr, result.stdout)
                     record.status = "failed"
                 else:
                     if os.path.getsize(temp_output_file_name) > 0:
@@ -171,3 +163,33 @@ def perform_task(id):
         if os.path.exists(temp_output_file_name):
             os.remove(temp_output_file_name)
         session.close()
+
+if USE_BUCKET:
+    client = storage.Client()
+    bucket = client.bucket(UPLOAD_BUCKET)
+
+if not USE_PUB_SUB:
+    print("Celery is using BROKER_HOST:", BROKER_HOST)
+    celery_app = Celery('tasks', broker=f'redis://{BROKER_HOST}:{BROKER_PORT}/0')
+    @celery_app.task(name='conversor.convert')
+    def perform_task(id):
+        process_task(id)
+else:
+    subscriber = pubsub_v1.SubscriberClient()
+    subscription_path = subscriber.subscription_path(GCP_PROJECT_ID, GCP_SUBSCRIPTION_ID)
+
+    def callback(message: pubsub_v1.subscriber.message.Message) -> None:
+        print(f"Received message: {message}")
+        task_id = message.data.decode("utf-8")
+        message.ack()
+        process_task(task_id)
+        print(f"Acknowledged message ID {message.message_id}")
+
+    streaming_pull_future = subscriber.subscribe(subscription_path, callback=callback)
+    print(f"Listening for messages on {subscription_path}..\n")
+
+    try:
+        streaming_pull_future.result()
+    except KeyboardInterrupt:
+        streaming_pull_future.cancel()
+        subscriber.close()
