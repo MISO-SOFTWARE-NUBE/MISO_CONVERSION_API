@@ -25,7 +25,7 @@ OUR_JWTSECRET = os.getenv("JWTSECRET", "conversiones")
 USE_PUB_SUB = os.getenv("USE_PUB_SUB", "False").lower() in ('true', '1', 't')
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID", "crear-proyecto-nuevo-en-gcp")
 GCP_TOPIC_ID = os.getenv("GCP_TOPIC_ID", "ConversorTopic")
-GCP_SUBSCRIPTION_ID =  os.getenv("GCP_SUBSCRIPTION_ID", "ConversorTopic-sub")
+GCP_SUBSCRIPTION_ID = os.getenv("GCP_SUBSCRIPTION_ID", "ConversorTopic-sub")
 BROKER_HOST = os.getenv("BROKER_HOST", "127.0.0.1")
 BROKER_PORT = os.getenv("BROKER_PORT", "6379")
 USE_BUCKET = os.getenv("USE_BUCKET", "False").lower() in ('true', '1', 't')
@@ -71,6 +71,7 @@ class Solicitudes(Base):
     # Relationship for referencing Usuario
     usuario = relationship("Usuario", back_populates="solicitudes")
 
+
 def process_task(id):
     # Establish a new session
     session = Session()
@@ -114,7 +115,7 @@ def process_task(id):
 
                 if result.returncode != 0:
                     print("Error converting file:",
-                        result.stderr, result.stdout)
+                          result.stderr, result.stdout)
                     record.status = "failed"
                 else:
                     if os.path.getsize(temp_output_file_name) > 0:
@@ -164,19 +165,23 @@ def process_task(id):
             os.remove(temp_output_file_name)
         session.close()
 
+
 if USE_BUCKET:
     client = storage.Client()
     bucket = client.bucket(UPLOAD_BUCKET)
 
 if not USE_PUB_SUB:
     print("Celery is using BROKER_HOST:", BROKER_HOST)
-    celery_app = Celery('tasks', broker=f'redis://{BROKER_HOST}:{BROKER_PORT}/0')
+    celery_app = Celery(
+        'tasks', broker=f'redis://{BROKER_HOST}:{BROKER_PORT}/0')
+
     @celery_app.task(name='conversor.convert')
     def perform_task(id):
         process_task(id)
 else:
     subscriber = pubsub_v1.SubscriberClient()
-    subscription_path = subscriber.subscription_path(GCP_PROJECT_ID, GCP_SUBSCRIPTION_ID)
+    subscription_path = subscriber.subscription_path(
+        GCP_PROJECT_ID, GCP_SUBSCRIPTION_ID)
 
     def callback(message: pubsub_v1.subscriber.message.Message) -> None:
         print(f"Received message: {message}")
@@ -185,7 +190,8 @@ else:
         process_task(task_id)
         print(f"Acknowledged message ID {message.message_id}")
 
-    streaming_pull_future = subscriber.subscribe(subscription_path, callback=callback)
+    streaming_pull_future = subscriber.subscribe(
+        subscription_path, callback=callback)
     print(f"Listening for messages on {subscription_path}..\n")
 
     try:
