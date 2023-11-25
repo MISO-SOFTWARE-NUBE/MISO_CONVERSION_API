@@ -50,7 +50,7 @@ cors = CORS(app)
 api = Api(app)
 
 client = storage.Client()
-bucket = client.bucket(current_app.config['BUCKET'])
+bucket = client.bucket(current_app.config['UPLOAD_BUCKET'])
 
 
 def process_task(id):
