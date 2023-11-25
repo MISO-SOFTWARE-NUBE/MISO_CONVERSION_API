@@ -18,12 +18,15 @@ from google.cloud import pubsub_v1
 if USE_PUB_SUB:
     publisher = pubsub_v1.PublisherClient()
     topic_name = f'projects/{GCP_PROJECT_ID}/topics/{GCP_TOPIC_ID}'
+
     def publish_to_topic(id):
         data = str(id).encode("utf-8")
         future = publisher.publish(topic_name, data)
         print(f"Published message id {future.result()}")
 else:
-    celery_app = Celery('tasks', broker=f'redis://{BROKER_HOST}:{BROKER_PORT}/0')
+    celery_app = Celery(
+        'tasks', broker=f'redis://{BROKER_HOST}:{BROKER_PORT}/0')
+
     @celery_app.task(name='conversor.convert')
     def perform_task(id):
         pass
@@ -31,6 +34,7 @@ else:
 if USE_BUCKET:
     client = storage.Client()
     bucket = client.bucket(UPLOAD_BUCKET)
+
 
 class VistaSignUp(Resource):
     def post(self):
