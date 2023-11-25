@@ -1,0 +1,13 @@
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      [
+        "build",
+        "-t",
+        "gcr.io/$PROJECT_ID/rest-api:0.1",
+        "-f",
+        "src_worker/Dockerfile",
+        ".",
+      ]
+images:
+  - "gcr.io/$PROJECT_ID/rest-api:0.1"
