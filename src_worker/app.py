@@ -2,6 +2,7 @@ import os
 from datetime import datetime
 import subprocess
 import tempfile
+import base64
 
 from flask import request, current_app
 from flask_cors import CORS
@@ -117,6 +118,10 @@ def process_task(id):
 
 class ProcesarTarea(Resource):
     def post(self):
+        print(request.json)
+        bodyMessage = request.json.get("message").get("data")
+        bodyText = base64.b64decode(bodyMessage)
+        print(bodyText)
         id = request.json.get("id")
         try:
             process_task(id)
