@@ -122,7 +122,7 @@ class ProcesarTarea(Resource):
         bodyMessage = request.json.get("message").get("data")
         bodyText = base64.b64decode(bodyMessage)
         print(bodyText)
-        id = bodyText
+        id = str(bodyText)
         try:
             process_task(id)
             return {"mensaje": "Tarea procesada correctamente"}, 200
