@@ -83,6 +83,8 @@ def process_task(app, id,):
             # Get gcp blobs for input and output
             input_blob = bucket.blob(input_blob_name)
             output_blob = bucket.blob(output_blob_name)
+            logger.info("input_blob: %s", input_blob)
+            logger.info("output_blob: %s", output_blob)
 
             # Download the input file to a temp file
             with tempfile.NamedTemporaryFile() as temp_input_file:
@@ -98,13 +100,20 @@ def process_task(app, id,):
                     '-i', temp_input_file.name,
                     temp_output_file_name
                 ]
+
+                echo_cmd = [
+                    'echo',
+                    'This is the echo command doing some testing'
+                ]
+                subprocess.run(echo_cmd)
                 logger.info("Started processing")
+                logger.info("command to be executed: %s", cmd)
                 result = subprocess.run(cmd, capture_output=True, text=True)
                 logger.info("Finished processing")
 
                 if result.returncode != 0:
-                    logger.info("Error converting file:",
-                                result.stderr, result.stdout)
+                    print("Error converting file:",
+                          result.stderr, result.stdout)
                     record.status = "failed"
                 else:
                     if os.path.getsize(temp_output_file_name) > 0:
@@ -113,12 +122,11 @@ def process_task(app, id,):
                                 temp_output_file, content_type=f'video/{record.output_format}')
                         record.status = "available"
                     else:
-                        logger.info("Conversion resulted in an empty file.")
+                        print("Conversion resulted in an empty file.")
                         record.status = "failed"
                 record.end_process_date = datetime.now()
                 session.commit()
         except Exception as e:
-            logger.info(e)
             session.rollback()
             if record:
                 record.status = "failed"
