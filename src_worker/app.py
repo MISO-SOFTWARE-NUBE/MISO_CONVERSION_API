@@ -103,8 +103,8 @@ def process_task(app, id,):
                 logger.info("Finished processing")
 
                 if result.returncode != 0:
-                    print("Error converting file:",
-                          result.stderr, result.stdout)
+                    logger.info("Error converting file:",
+                                result.stderr, result.stdout)
                     record.status = "failed"
                 else:
                     if os.path.getsize(temp_output_file_name) > 0:
@@ -113,11 +113,12 @@ def process_task(app, id,):
                                 temp_output_file, content_type=f'video/{record.output_format}')
                         record.status = "available"
                     else:
-                        print("Conversion resulted in an empty file.")
+                        logger.info("Conversion resulted in an empty file.")
                         record.status = "failed"
                 record.end_process_date = datetime.now()
                 session.commit()
         except Exception as e:
+            logger.info(e)
             session.rollback()
             if record:
                 record.status = "failed"
