@@ -57,6 +57,7 @@ bucket = client.bucket(current_app.config['UPLOAD_BUCKET'])
 
 def process_task(id):
     try:
+        print("💥💥💥💥💥💥💥💥💥💥Id No.": id)
         # 1. Query record in database
         record = db.session.query(Solicitudes).get(id)
 
