@@ -4,6 +4,8 @@ import subprocess
 import tempfile
 import base64
 import threading
+from concurrent.futures import ThreadPoolExecutor
+import logging
 
 from flask import request, current_app
 from flask_cors import CORS
@@ -16,6 +18,9 @@ from sqlalchemy.orm import scoped_session
 
 from src_worker import create_app
 from utils import get_blob_name_from_gs_uri
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 db = SQLAlchemy()
@@ -93,8 +98,9 @@ def process_task(app, id,):
                     '-i', temp_input_file.name,
                     temp_output_file_name
                 ]
-
+                logger.info("Started processing")
                 result = subprocess.run(cmd, capture_output=True, text=True)
+                logger.info("Finished processing")
 
                 if result.returncode != 0:
                     print("Error converting file:",
@@ -117,18 +123,22 @@ def process_task(app, id,):
                 record.status = "failed"
                 session.commit()
         finally:
+            logger.info("Finnaly")
             session.remove()
             if os.path.exists(temp_output_file_name):
                 os.remove(temp_output_file_name)
 
 
 class ProcesarTarea(Resource):
+    executor = ThreadPoolExecutor(max_workers=10)
+
     def post(self):
         bodyMessage = request.json.get("message").get("data")
         bodyText = base64.b64decode(bodyMessage)
         id = bodyText.decode("utf-8")
-        thread = threading.Thread(target=process_task, args=(app, id,))
-        thread.start()
+        self.executor.submit(process_task, app, id)
+        # thread = threading.Thread(target=process_task, args=(app, id,))
+        # thread.start()
         return {"mensaje": "Tarea procesada correctamente"}, 200
 
 
