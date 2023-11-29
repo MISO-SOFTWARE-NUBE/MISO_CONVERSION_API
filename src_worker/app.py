@@ -11,6 +11,8 @@ from flask_restful import Api
 from flask_sqlalchemy import SQLAlchemy
 from flask_restful import Resource
 from google.cloud import storage
+from sqlalchemy.orm import scoped_session
+
 
 from src_worker import create_app
 from utils import get_blob_name_from_gs_uri
@@ -55,16 +57,19 @@ client = storage.Client()
 bucket = client.bucket(current_app.config['UPLOAD_BUCKET'])
 
 
-def process_task(app, id, bucket):
+def process_task(app, id,):
     with app.app_context():
+        # Create a scoped session for this thread
+        session = scoped_session(db.sessionmaker(bind=db.engine))
+
         try:
             # 1. Query record in database
-            record = db.session.query(Solicitudes).get(int(id))
+            record = session.query(Solicitudes).get(int(id))
 
             # 2. Register start_processing_time and update status
             record.start_process_date = datetime.now()
             record.status = "in_process"
-            db.session.commit()
+            session.commit()
 
             # 3. Get blob names from db
             input_blob_name = get_blob_name_from_gs_uri(record.input_path)
@@ -104,14 +109,15 @@ def process_task(app, id, bucket):
                     else:
                         print("Conversion resulted in an empty file.")
                         record.status = "failed"
-
                 record.end_process_date = datetime.now()
-                db.session.commit()
+                session.commit()
         except Exception as e:
-            db.session.rollback()
-            record.status = "failed"
-            raise e
+            session.rollback()
+            if record:
+                record.status = "failed"
+                session.commit()
         finally:
+            session.remove()
             if os.path.exists(temp_output_file_name):
                 os.remove(temp_output_file_name)
 
@@ -121,7 +127,7 @@ class ProcesarTarea(Resource):
         bodyMessage = request.json.get("message").get("data")
         bodyText = base64.b64decode(bodyMessage)
         id = bodyText.decode("utf-8")
-        thread = threading.Thread(target=process_task, args=(app, id, bucket,))
+        thread = threading.Thread(target=process_task, args=(app, id,))
         thread.start()
         return {"mensaje": "Tarea procesada correctamente"}, 200
 
