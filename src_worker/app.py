@@ -3,6 +3,7 @@ from datetime import datetime
 import subprocess
 import tempfile
 import base64
+import threading
 
 from flask import request, current_app
 from flask_cors import CORS
@@ -119,11 +120,9 @@ class ProcesarTarea(Resource):
         bodyMessage = request.json.get("message").get("data")
         bodyText = base64.b64decode(bodyMessage)
         id = bodyText.decode("utf-8")
-        try:
-            process_task(id)
-            return {"mensaje": "Tarea procesada correctamente"}, 200
-        except Exception as e:
-            return {"mensaje": "Ocurrió un error procesando la tarea"}, 404
+        thread = threading.Thread(target=process_task, args=(id,))
+        thread.start()
+        return {"mensaje": "Tarea procesada correctamente"}, 200
 
 
 api.add_resource(ProcesarTarea, '/procesar')
