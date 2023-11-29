@@ -79,12 +79,12 @@ def process_task(app, id,):
             # 3. Get blob names from db
             input_blob_name = get_blob_name_from_gs_uri(record.input_path)
             output_blob_name = get_blob_name_from_gs_uri(record.output_path)
+            logger.info("input_blob_name: %s", input_blob_name)
+            logger.info("output_blob_name: %s", output_blob_name)
 
             # Get gcp blobs for input and output
             input_blob = bucket.blob(input_blob_name)
             output_blob = bucket.blob(output_blob_name)
-            logger.info("input_blob: %s", input_blob)
-            logger.info("output_blob: %s", output_blob)
 
             # Download the input file to a temp file
             with tempfile.NamedTemporaryFile() as temp_input_file:
@@ -92,6 +92,10 @@ def process_task(app, id,):
                 fd_out, temp_output_file_name = tempfile.mkstemp(
                     suffix=f'.{record.output_format}')
                 os.close(fd_out)
+
+                logger.info("temp_input_file_name: %s", temp_input_file.name)
+                logger.info("temp_output_file_name: %s", temp_output_file.name)
+                logger.info("record.input_format: %s", record.input_format)
 
                 cmd = [
                     'ffmpeg',
