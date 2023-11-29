@@ -103,25 +103,21 @@ def process_task(id):
                     print("Conversion resulted in an empty file.")
                     record.status = "failed"
 
-            # Update the end process date and commit the status
             record.end_process_date = datetime.now()
             db.session.commit()
     except Exception as e:
-        db.session.rollback()  # rollback in case of errors
+        db.session.rollback()
         record.status = "failed"
         raise e
     finally:
-        # Delete the temporary output file after the upload has been attempted
         if os.path.exists(temp_output_file_name):
             os.remove(temp_output_file_name)
 
 
 class ProcesarTarea(Resource):
     def post(self):
-        print(request.json)
         bodyMessage = request.json.get("message").get("data")
         bodyText = base64.b64decode(bodyMessage)
-        print(bodyText)
         id = bodyText.decode("utf-8")
         try:
             process_task(id)
