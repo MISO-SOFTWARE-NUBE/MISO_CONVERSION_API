@@ -57,9 +57,9 @@ bucket = client.bucket(current_app.config['UPLOAD_BUCKET'])
 
 def process_task(id):
     try:
-        print(f"💥💥💥💥💥💥💥💥💥💥Id No.: {id}")
+        print("Id:", id)
         # 1. Query record in database
-        record = db.session.query(Solicitudes).get(id)
+        record = db.session.query(Solicitudes).get(int(id))
 
         # 2. Register start_processing_time and update status
         record.start_process_date = datetime.now()
