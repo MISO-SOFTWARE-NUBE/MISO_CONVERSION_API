@@ -55,7 +55,7 @@ client = storage.Client()
 bucket = client.bucket(current_app.config['UPLOAD_BUCKET'])
 
 
-def process_task(app, id):
+def process_task(app, id, bucket):
     with app.app_context():
         try:
             # 1. Query record in database
@@ -121,7 +121,7 @@ class ProcesarTarea(Resource):
         bodyMessage = request.json.get("message").get("data")
         bodyText = base64.b64decode(bodyMessage)
         id = bodyText.decode("utf-8")
-        thread = threading.Thread(target=process_task, args=(app, id,))
+        thread = threading.Thread(target=process_task, args=(app, id, bucket,))
         thread.start()
         return {"mensaje": "Tarea procesada correctamente"}, 200
 
