@@ -102,7 +102,8 @@ def process_task(app, id,):
                     '-y',
                     '-f', record.input_format,
                     '-i', temp_input_file.name,
-                    temp_output_file_name
+                    temp_output_file_name,
+                    '-progress', 'pipe:1'
                 ]
 
                 echo_cmd = [
@@ -112,24 +113,38 @@ def process_task(app, id,):
                 subprocess.run(echo_cmd)
                 logger.info("Started processing")
                 logger.info("command to be executed: %s", cmd)
-                result = subprocess.run(cmd, capture_output=True, text=True)
+                
+                # result = subprocess.run(cmd, capture_output=True, text=True)
+                process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+                while True:
+                    output = process.stdout.readline()
+                    if output == '' and process.poll() is not None:
+                        break
+                    if output:
+                        # Analizar la información de progreso y registrarla
+                        print(output.strip())
+
+                # Esperar a que termine el proceso
+                process.communicate()
+
                 logger.info("Finished processing")
 
-                if result.returncode != 0:
-                    logger.info("Error converting file:",
-                                result.stderr, result.stdout)
-                    record.status = "failed"
-                else:
-                    if os.path.getsize(temp_output_file_name) > 0:
-                        with open(temp_output_file_name, 'rb') as temp_output_file:
-                            output_blob.upload_from_file(
-                                temp_output_file, content_type=f'video/{record.output_format}')
-                        record.status = "available"
-                    else:
-                        logger.info("Conversion resulted in an empty file.")
-                        record.status = "failed"
-                record.end_process_date = datetime.now()
-                session.commit()
+                # if result.returncode != 0:
+                #     logger.info("Error converting file:",
+                #                 result.stderr, result.stdout)
+                #     record.status = "failed"
+                # else:
+                #     if os.path.getsize(temp_output_file_name) > 0:
+                #         with open(temp_output_file_name, 'rb') as temp_output_file:
+                #             output_blob.upload_from_file(
+                #                 temp_output_file, content_type=f'video/{record.output_format}')
+                #         record.status = "available"
+                #     else:
+                #         logger.info("Conversion resulted in an empty file.")
+                #         record.status = "failed"
+                # record.end_process_date = datetime.now()
+                # session.commit()
         except Exception as e:
             logger.error("Error general:", exc_info=True)
             session.rollback()
