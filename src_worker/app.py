@@ -123,7 +123,7 @@ def process_task(app, id,):
                         break
                     if output:
                         # Analizar la información de progreso y registrarla
-                        print(output.strip())
+                        logger.info(output.strip())
 
                 # Esperar a que termine el proceso
                 process.communicate()
