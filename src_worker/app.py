@@ -94,7 +94,7 @@ def process_task(app, id,):
                 os.close(fd_out)
 
                 logger.info("temp_input_file_name: %s", temp_input_file.name)
-                logger.info("temp_output_file_name: %s", temp_output_file.name)
+                logger.info("temp_output_file_name: %s", temp_output_file_name)
                 logger.info("record.input_format: %s", record.input_format)
 
                 cmd = [
