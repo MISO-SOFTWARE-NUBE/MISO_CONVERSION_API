@@ -131,6 +131,7 @@ def process_task(app, id,):
                 record.end_process_date = datetime.now()
                 session.commit()
         except Exception as e:
+            logger.error("Error general:", exc_info=True)
             session.rollback()
             if record:
                 record.status = "failed"
