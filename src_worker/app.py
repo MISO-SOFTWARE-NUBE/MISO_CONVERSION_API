@@ -3,9 +3,6 @@ from datetime import datetime
 import subprocess
 import tempfile
 import base64
-import threading
-from concurrent.futures import ThreadPoolExecutor
-import logging
 
 from flask import request, current_app
 from flask_cors import CORS
@@ -13,14 +10,9 @@ from flask_restful import Api
 from flask_sqlalchemy import SQLAlchemy
 from flask_restful import Resource
 from google.cloud import storage
-from sqlalchemy.orm import scoped_session
-
 
 from src_worker import create_app
 from utils import get_blob_name_from_gs_uri
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 db = SQLAlchemy()
@@ -62,114 +54,84 @@ client = storage.Client()
 bucket = client.bucket(current_app.config['UPLOAD_BUCKET'])
 
 
-def process_task(app, id,):
-    with app.app_context():
-        # Create a scoped session for this thread
-        session = scoped_session(db.sessionmaker(bind=db.engine))
+def process_task(id):
+    try:
+        # 1. Query record in database
+        record = db.session.query(Solicitudes).get(id)
 
-        try:
-            # 1. Query record in database
-            record = session.query(Solicitudes).get(int(id))
+        # 2. Register start_processing_time and update status
+        record.start_process_date = datetime.now()
+        record.status = "in_process"
+        db.session.commit()
 
-            # 2. Register start_processing_time and update status
-            record.start_process_date = datetime.now()
-            record.status = "in_process"
-            session.commit()
+        # 3. Get blob names from db
+        input_blob_name = get_blob_name_from_gs_uri(record.input_path)
+        output_blob_name = get_blob_name_from_gs_uri(record.output_path)
 
-            # 3. Get blob names from db
-            input_blob_name = get_blob_name_from_gs_uri(record.input_path)
-            output_blob_name = get_blob_name_from_gs_uri(record.output_path)
-            logger.info("input_blob_name: %s", input_blob_name)
-            logger.info("output_blob_name: %s", output_blob_name)
+        # Get gcp blobs for input and output
+        input_blob = bucket.blob(input_blob_name)
+        output_blob = bucket.blob(output_blob_name)
 
-            # Get gcp blobs for input and output
-            input_blob = bucket.blob(input_blob_name)
-            output_blob = bucket.blob(output_blob_name)
+        # Download the input file to a temp file
+        with tempfile.NamedTemporaryFile() as temp_input_file:
+            input_blob.download_to_filename(temp_input_file.name)
+            fd_out, temp_output_file_name = tempfile.mkstemp(
+                suffix=f'.{record.output_format}')
+            os.close(fd_out)
 
-            # Download the input file to a temp file
-            with tempfile.NamedTemporaryFile() as temp_input_file:
-                input_blob.download_to_filename(temp_input_file.name)
-                fd_out, temp_output_file_name = tempfile.mkstemp(
-                    suffix=f'.{record.output_format}')
-                os.close(fd_out)
+            cmd = [
+                'ffmpeg',
+                '-y',  # Sobrescribe el archivo de salida si ya existe
+                '-f', record.input_format,
+                '-i', temp_input_file.name,  # Especifica el archivo de entrada
+                '-c:v', 'libx264',  # Selecciona el códec de video
+                '-b:v', '2000k',    # Establece la tasa de bits de video
+                '-s', '1280x720',   # Establece la resolución
+                '-preset', 'ultrafast',  # Selecciona el preset
+                temp_output_file_name        # Especifica el archivo de salida
+            ]
 
-                logger.info("temp_input_file_name: %s", temp_input_file.name)
-                logger.info("temp_output_file_name: %s", temp_output_file_name)
-                logger.info("record.input_format: %s", record.input_format)
+            result = subprocess.run(cmd, capture_output=True, text=True)
 
-                cmd = [
-                    'ffmpeg',
-                    '-y',
-                    '-f', record.input_format,
-                    '-i', temp_input_file.name,
-                    temp_output_file_name,
-                    '-threads', '10',
-                    '-progress', 'pipe:1'
-                ]
-
-                echo_cmd = [
-                    'echo',
-                    'This is the echo command doing some testing'
-                ]
-                subprocess.run(echo_cmd)
-                logger.info("Started processing")
-                logger.info("command to be executed: %s", cmd)
-                
-                # result = subprocess.run(cmd, capture_output=True, text=True)
-                process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-
-                while True:
-                    output = process.stdout.readline()
-                    if output == '' and process.poll() is not None:
-                        break
-                    if output:
-                        # Analizar la información de progreso y registrarla
-                        logger.info(output.strip())
-
-                # Esperar a que termine el proceso
-                process.communicate()
-
-                logger.info("Finished processing")
-
-                # if result.returncode != 0:
-                #     logger.info("Error converting file:",
-                #                 result.stderr, result.stdout)
-                #     record.status = "failed"
-                # else:
-                #     if os.path.getsize(temp_output_file_name) > 0:
-                #         with open(temp_output_file_name, 'rb') as temp_output_file:
-                #             output_blob.upload_from_file(
-                #                 temp_output_file, content_type=f'video/{record.output_format}')
-                #         record.status = "available"
-                #     else:
-                #         logger.info("Conversion resulted in an empty file.")
-                #         record.status = "failed"
-                # record.end_process_date = datetime.now()
-                # session.commit()
-        except Exception as e:
-            logger.error("Error general:", exc_info=True)
-            session.rollback()
-            if record:
+            if result.returncode != 0:
+                print("Error converting file:",
+                      result.stderr, result.stdout)
                 record.status = "failed"
-                session.commit()
-        finally:
-            logger.info("Finnaly")
-            session.remove()
-            if os.path.exists(temp_output_file_name):
-                os.remove(temp_output_file_name)
+            else:
+                if os.path.getsize(temp_output_file_name) > 0:
+                    with open(temp_output_file_name, 'rb') as temp_output_file:
+                        output_blob.upload_from_file(
+                            temp_output_file, content_type=f'video/{record.output_format}')
+                    record.status = "available"
+                else:
+                    print("Conversion resulted in an empty file.")
+                    record.status = "failed"
+
+            # Update the end process date and commit the status
+            record.end_process_date = datetime.now()
+            db.session.commit()
+    except Exception as e:
+        db.session.rollback()  # rollback in case of errors
+        record.status = "failed"
+        raise e
+    finally:
+        # Delete the temporary output file after the upload has been attempted
+        if os.path.exists(temp_output_file_name):
+            os.remove(temp_output_file_name)
 
 
 class ProcesarTarea(Resource):
-    executor = ThreadPoolExecutor(max_workers=10)
-
     def post(self):
+        print(request.json)
         bodyMessage = request.json.get("message").get("data")
         bodyText = base64.b64decode(bodyMessage)
+        print(bodyText)
         id = bodyText.decode("utf-8")
-        self.executor.submit(process_task, app, id)
-        # thread = threading.Thread(target=process_task, args=(app, id,))
-        # thread.start()
-        return {"mensaje": "Tarea procesada correctamente"}, 200
+        try:
+            process_task(id)
+            return {"mensaje": "Tarea procesada correctamente"}, 200
+        except Exception as e:
+            return {"mensaje": "Ocurrió un error procesando la tarea"}, 404
 
 
 api.add_resource(ProcesarTarea, '/procesar')
