@@ -1,3 +1,4 @@
+import logging
 import os
 from datetime import datetime
 import subprocess
@@ -13,6 +14,9 @@ from google.cloud import storage
 
 from src_worker import create_app
 from utils import get_blob_name_from_gs_uri
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 db = SQLAlchemy()
@@ -111,6 +115,7 @@ def process_task(id):
             record.end_process_date = datetime.now()
             db.session.commit()
     except Exception as e:
+        logger.info("Error processing task: %s", e)
         db.session.rollback()  # rollback in case of errors
         record.status = "failed"
         raise e
