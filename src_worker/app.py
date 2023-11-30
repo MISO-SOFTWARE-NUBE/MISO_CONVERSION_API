@@ -103,6 +103,7 @@ def process_task(app, id,):
                     '-f', record.input_format,
                     '-i', temp_input_file.name,
                     temp_output_file_name,
+                    '-threads', '10',
                     '-progress', 'pipe:1'
                 ]
 
