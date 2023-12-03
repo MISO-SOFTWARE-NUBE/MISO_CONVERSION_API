@@ -82,3 +82,11 @@ Hemos creado 2 directorios llamados docker-worker-pubsub y docker-web-pubsub. Ad
 - GCP_PROJECT_ID
 - GCP_TOPIC_ID
 - GCP_SUBSCRIPTION_ID
+
+  ## Cloud Run (entrega semana 8)
+
+  Para esta entrega hemos creado un nuevo directorio llamado `./src_worker` con el código de la aplicación de flask que se encarga de recibir los mensajes de pub/sub. En este directorio se encuentra un archivo `Dockerfile` con las instrucciones para la construcción de la imagen. Así mismo existe un archivo `cloudbuild.yaml` para que desde la raíz del proyecto pueda construirse la imagen del worker (ya que la imagen debe empaquetarse con archivos que se encuentran en la raíz del proyecto `./`).
+
+  Del mismo modo adentro de la carpeta `./src` hemos creado un archivo `Dockerfile` con las instrucciones para crear la imágen de la API REST y un archivo `cloudbuild.yaml` para que la imagen puda construirse desde la raíz del proyecto `./`, ya que la API debe construirse con archivos que se encuentran en la raíz.
+
+  Las variables de entorno a crear en Cloud Run son las mismas que las de la entrega anterior.
